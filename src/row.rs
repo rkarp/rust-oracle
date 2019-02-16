@@ -119,20 +119,20 @@ impl fmt::Debug for Row {
 }
 
 /// Result set
-pub struct ResultSet<'a, T>
+pub struct ResultSet<'conn, 'stmt, T>
 where
     T: RowValue,
 {
-    stmt: Option<&'a Statement<'a>>,
-    pub(crate) stmt_boxed: Option<Box<Statement<'a>>>,
+    stmt: Option<&'stmt mut Statement<'conn>>,
+    pub(crate) stmt_boxed: Option<Box<Statement<'conn>>>,
     phantom: PhantomData<T>,
 }
 
-impl<'a, T> ResultSet<'a, T>
+impl<'conn, 'stmt, T> ResultSet<'conn, 'stmt, T>
 where
     T: RowValue,
 {
-    pub(crate) fn new(stmt: &'a Statement<'a>) -> ResultSet<'a, T> {
+    pub(crate) fn new(stmt: &'stmt mut Statement<'conn>) -> ResultSet<'conn, 'stmt, T> {
         ResultSet {
             stmt: Some(stmt),
             stmt_boxed: None,
@@ -140,7 +140,7 @@ where
         }
     }
 
-    pub(crate) fn from_conn(conn: &'a Connection, sql: &str) -> Result<ResultSet<'a, T>> {
+    pub(crate) fn from_conn(conn: &'conn Connection, sql: &str) -> Result<ResultSet<'conn, 'stmt, T>> {
         Ok(ResultSet {
             stmt: None,
             stmt_boxed: Some(Box::new(conn.prepare(sql, &[])?)),
@@ -149,10 +149,20 @@ where
     }
 
     fn stmt(&self) -> &Statement {
-        if self.stmt.is_some() {
-            self.stmt.as_ref().unwrap()
-        } else if self.stmt_boxed.is_some() {
-            self.stmt_boxed.as_ref().unwrap().as_ref()
+        if let Some(stmt) = &self.stmt {
+            stmt
+        } else if let Some(stmt_boxed) = &self.stmt_boxed {
+            stmt_boxed.as_ref()
+        } else {
+            panic!("Both stmt and stmt_boxed are none!");
+        }
+    }
+
+    fn stmt_mut(&mut self) -> &mut Statement<'conn> {
+        if let Some(stmt) = &mut self.stmt {
+            stmt
+        } else if let Some(stmt_boxed) = &mut self.stmt_boxed {
+            stmt_boxed.as_mut()
         } else {
             panic!("Both stmt and stmt_boxed are none!");
         }
@@ -163,20 +173,20 @@ where
     }
 }
 
-impl<'stmt, T> Iterator for ResultSet<'stmt, T>
+impl<'conn, 'stmt, T> Iterator for ResultSet<'conn, 'stmt, T>
 where
     T: RowValue,
 {
     type Item = Result<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.stmt()
+        self.stmt_mut()
             .next()
             .map(|row_result| row_result.and_then(|row| row.get_as::<T>()))
     }
 }
 
-impl<'stmt, T> fmt::Debug for ResultSet<'stmt, T>
+impl<'conn, 'stmt, T> fmt::Debug for ResultSet<'conn, 'stmt, T>
 where
     T: RowValue,
 {
