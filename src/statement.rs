@@ -273,7 +273,7 @@ impl<'conn> Statement<'conn> {
     ///
     /// [Row]: struct.Row.html
     /// [Query Methods]: https://github.com/kubo/rust-oracle/blob/master/docs/query-methods.md
-    pub fn query(&mut self, params: &[&ToSql]) -> Result<ResultSet<Row>> {
+    pub fn query<'stmt>(&'stmt mut self, params: &[&ToSql]) -> Result<ResultSet<'conn, 'stmt, Row>> {
         self.exec(params, true, "query")?;
         Ok(ResultSet::<Row>::new(self))
     }
@@ -284,7 +284,7 @@ impl<'conn> Statement<'conn> {
     ///
     /// [Row]: struct.Row.html
     /// [Query Methods]: https://github.com/kubo/rust-oracle/blob/master/docs/query-methods.md
-    pub fn query_named(&mut self, params: &[(&str, &ToSql)]) -> Result<ResultSet<Row>> {
+    pub fn query_named<'stmt>(&'stmt mut self, params: &[(&str, &ToSql)]) -> Result<ResultSet<'conn, 'stmt, Row>> {
         self.exec_named(params, true, "query_named")?;
         Ok(ResultSet::<Row>::new(self))
     }
@@ -295,7 +295,7 @@ impl<'conn> Statement<'conn> {
     ///
     /// [RowValue]: struct.RowValue.html
     /// [Query Methods]: https://github.com/kubo/rust-oracle/blob/master/docs/query-methods.md
-    pub fn query_as<'a, T>(&'a mut self, params: &[&ToSql]) -> Result<ResultSet<'a, T>>
+    pub fn query_as<'stmt, T>(&'stmt mut self, params: &[&ToSql]) -> Result<ResultSet<'conn, 'stmt, T>>
     where
         T: RowValue,
     {
@@ -309,10 +309,10 @@ impl<'conn> Statement<'conn> {
     ///
     /// [RowValue]: struct.RowValue.html
     /// [Query Methods]: https://github.com/kubo/rust-oracle/blob/master/docs/query-methods.md
-    pub fn query_as_named<'a, T>(
-        &'a mut self,
+    pub fn query_as_named<'stmt, T>(
+        &'stmt mut self,
         params: &[(&str, &ToSql)],
-    ) -> Result<ResultSet<'a, T>>
+    ) -> Result<ResultSet<'conn, 'stmt, T>>
     where
         T: RowValue,
     {
@@ -702,7 +702,7 @@ impl<'conn> Statement<'conn> {
         Ok(vec)
     }
 
-    pub(crate) fn next(&self) -> Option<Result<&Row>> {
+    pub(crate) fn next(&mut self) -> Option<Result<&Row>> {
         let mut found = 0;
         let mut buffer_row_index = 0;
         if unsafe { dpiStmt_fetch(self.handle, &mut found, &mut buffer_row_index) } == 0 {
